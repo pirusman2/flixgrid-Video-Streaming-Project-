@@ -1,0 +1,45 @@
+# ---- Secrets (never commit) ----
+.env
+*.env
+!.env.example
+application-local.yml
+application-local.properties
+application-secrets.yml
+application-secrets.properties
+*.pem
+*.key
+*.p12
+*.jks
+credentials
+.aws/
+
+# ---- IDE ----
+.idea/
+*.iml
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+
+# ---- Build output ----
+target/
+build/
+out/
+*.class
+*.jar
+*.war
+*.log
+logs/
+HELP.md
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# ---- Local media / encoding temp files ----
+encoding-temp/
+temp/
+*.mp4
+*.mkv
+*.mov

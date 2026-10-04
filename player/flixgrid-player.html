@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlixGrid Streaming Demo</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #141414;
+            font-family: 'Arial', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+
+        .logo {
+            color: #E50914;
+            font-size: 48px;
+            font-weight: bold;
+            letter-spacing: 3px;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #999;
+            font-size: 14px;
+            margin-bottom: 40px;
+            letter-spacing: 1px;
+        }
+
+        .search-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 700px;
+        }
+
+        input {
+            flex: 1;
+            padding: 14px 18px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: 2px solid #333;
+            background: #222;
+            color: #fff;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            border-color: #E50914;
+        }
+
+        input::placeholder {
+            color: #666;
+        }
+
+        button {
+            padding: 14px 28px;
+            background: #E50914;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+
+        button:hover {
+            background: #f40612;
+        }
+
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+
+        #status {
+            font-size: 14px;
+            margin-bottom: 20px;
+            min-height: 20px;
+            text-align: center;
+        }
+
+        .status-loading {
+            color: #fff;
+        }
+
+        .status-success {
+            color: #46d369;
+        }
+
+        .status-error {
+            color: #E50914;
+        }
+
+        .video-container {
+            width: 100%;
+            max-width: 900px;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid #333;
+        }
+
+        video {
+            width: 100%;
+            display: block;
+            min-height: 400px;
+            background: #000;
+        }
+
+        .info-box {
+            margin-top: 20px;
+            background: #222;
+            border-radius: 8px;
+            padding: 20px;
+            width: 100%;
+            max-width: 900px;
+            display: none;
+        }
+
+        .info-box h3 {
+            color: #E50914;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .info-item {
+            background: #333;
+            padding: 12px;
+            border-radius: 5px;
+        }
+
+        .info-label {
+            color: #999;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+        }
+
+        .info-value {
+            color: #fff;
+            font-size: 14px;
+            word-break: break-all;
+        }
+
+        .tech-stack {
+            margin-top: 30px;
+            color: #666;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .tech-stack span {
+            color: #E50914;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="logo">FLIXGRID</div>
+    <div class="subtitle">Streaming Platform Demo — Spring Boot + Kafka + AWS S3 + Redis</div>
+
+    <div class="search-container">
+        <input type="text" id="movieId" placeholder="Enter Movie ID (from Content Service)"
+            onkeypress="if(event.key==='Enter') loadMovie()" />
+        <button id="playBtn" onclick="loadMovie()">▶ Play</button>
+    </div>
+
+    <div id="status"></div>
+
+    <div class="video-container">
+        <video id="video" controls></video>
+    </div>
+
+    <div class="info-box" id="infoBox">
+        <h3>📊 Stream Information</h3>
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="info-label">Movie ID</div>
+                <div class="info-value" id="infoMovieId">—</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Available Qualities</div>
+                <div class="info-value" id="infoQuality">—</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">URL Expires In</div>
+                <div class="info-value" id="infoExpiry">—</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Streaming URL</div>
+                <div class="info-value" id="infoUrl">—</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tech-stack">
+        Built with <span>Spring Boot</span> · <span>Apache Kafka</span> ·
+        <span>AWS S3</span> · <span>Redis</span> · <span>FFmpeg HLS</span>
+    </div>
+
+    <script>
+        var hlsInstance = null;
+
+        function setStatus(message, type) {
+            var status = document.getElementById('status');
+            status.textContent = message;
+            status.className = 'status-' + type;
+        }
+
+        function loadMovie() {
+            var movieId = document.getElementById('movieId').value.trim();
+            var playBtn = document.getElementById('playBtn');
+
+            if (!movieId) {
+                setStatus('❌ Please enter a Movie ID', 'error');
+                return;
+            }
+
+            // Disable button while loading
+            playBtn.disabled = true;
+            playBtn.textContent = '⏳ Loading...';
+            setStatus('⏳ Fetching stream from Streaming Service...', 'loading');
+
+            // Call Streaming Service
+            fetch('http://localhost:8084/api/v1/stream/' + movieId)
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error('Movie not found or not ready for streaming');
+                    }
+                    return response.json();
+                })
+                .then(function (data) {
+                    setStatus('✅ Stream loaded! Playing in ' + data.quality, 'success');
+                    updateInfoBox(data);
+                    playHLS(data.streamingUrl);
+
+                    playBtn.disabled = false;
+                    playBtn.textContent = '▶ Play';
+                })
+                .catch(function (error) {
+                    setStatus('❌ ' + error.message, 'error');
+                    playBtn.disabled = false;
+                    playBtn.textContent = '▶ Play';
+                });
+        }
+
+        function playHLS(streamUrl) {
+            var video = document.getElementById('video');
+
+            if (Hls.isSupported()) {
+                // Clean up any previous player instance before starting a new one
+                if (hlsInstance) {
+                    hlsInstance.destroy();
+                    hlsInstance = null;
+                }
+
+                var hls = new Hls({
+                    // Override URL loader to route through our signing endpoint
+                    xhrSetup: function (xhr, url) {
+                        // If this is an m3u8 request — route through our signing endpoint
+                        if (url.includes('.m3u8') && !url.includes('X-Amz')) {
+                            var movieId = document.getElementById('movieId').value;
+                            var encodedPath = encodeURIComponent(
+                                url.split('.amazonaws.com/')[1]
+                            );
+                            xhr.open('GET',
+                                'http://localhost:8084/api/v1/stream/' +
+                                movieId + '/playlist?path=' + encodedPath
+                            );
+                        }
+                    }
+                });
+                hlsInstance = hls;
+
+                hls.loadSource(streamUrl);
+                hls.attachMedia(video);
+
+                // Log every HLS error so failures are no longer silent
+                hls.on(Hls.Events.ERROR, function (event, data) {
+                    console.error('HLS error:', data.type, data.details, data.url, data.response);
+                    if (data.fatal) {
+                        setStatus('❌ Playback error: ' + data.details + ' (see Console)', 'error');
+                    }
+                });
+
+                hls.on(Hls.Events.MANIFEST_PARSED, function () {
+                    video.play();
+                });
+            }
+        }
+
+        function updateInfoBox(data) {
+            document.getElementById('infoBox').style.display = 'block';
+            document.getElementById('infoMovieId').textContent = data.movieId;
+            document.getElementById('infoQuality').textContent = data.quality;
+            document.getElementById('infoExpiry').textContent = data.expiresInMinutes + ' minutes';
+            document.getElementById('infoUrl').textContent =
+                data.streamingUrl.substring(0, 60) + '...';
+        }
+    </script>
+
+</body>
+
+</html>

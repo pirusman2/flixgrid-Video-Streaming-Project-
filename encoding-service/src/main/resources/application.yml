@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: encoding-service
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: encoding-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring:
+          json:
+            trusted:
+              packages: "*"
+            use:
+              type:
+                headers: false
+            value:
+              default:
+                type: com.FlixGrid.encodingservice.event.VideoUploadedEvent
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+server:
+  port: 8083
+
+#AWS configuration
+aws:
+  access-key: ${AWS_ACCESS_KEY}
+  secret-key: ${AWS_SECRET_KEY}
+  region: ${AWS_REGION:eu-north-1}
+  s3:
+    bucket-name: ${AWS_BUCKET_NAME}
+
+#FFmpeg Configuration
+ffmpeg:
+  path: ${FFMPEG_PATH:C:/ffmpeg/bin/ffmpeg.exe}
+
+#Temp directory for encoding
+encoding:
+  base-path: ${TEMP_DIR:C:/temp/encoding}
+
+management:
+  endpoints:
+      web:
+        exposure:
+          include: health,info
+
